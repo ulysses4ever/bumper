@@ -1,31 +1,26 @@
 -- * Contains helper functions to load and manipulate .cabal files
 {-# LANGUAGE
-    TypeOperators
-  , TemplateHaskell
+    TemplateHaskell
   , TupleSections
   #-}
 module Package where
 
-import Control.Applicative
+import Control.Lens
 import Control.Monad
-import Data.Label
 import Data.List
 import Data.List.Split
 import Data.Maybe
-import Data.Version
+import Distribution.Types.Version (Version)
 import Distribution.Package hiding (Package)
 import Distribution.PackageDescription
-import Distribution.PackageDescription.Configuration
-import Distribution.PackageDescription.Parse
+import Distribution.Simple.PackageDescription (readGenericPackageDescription)
 import Distribution.Text
 import Distribution.Verbosity
-import System.IO.Strict
 import System.Process
 import Text.Regex
-import Version
 import qualified Data.Map as M
 
-import Prelude hiding (readFile)
+import System.IO (hGetContents)
 
 data Package = Package
     { _name         :: PackageName
@@ -34,14 +29,14 @@ data Package = Package
     , _dependencies :: [Dependency]
     } deriving (Show, Eq)
 
-$(mkLabels [''Package])
+$(makeLenses ''Package)
 
 type Packages = [Package]
 
 -- | Helper functions
 
 lookupPackage :: PackageName -> Packages -> Maybe Package
-lookupPackage s = find ((== s) . _name)
+lookupPackage s = find ((== s) . view name)
 
 lookupPackages ::  [PackageName] -> Packages -> Packages
 lookupPackages ns ps = catMaybes . map (flip lookupPackage ps) $ ns
@@ -50,7 +45,7 @@ hasPackage :: PackageName -> Packages -> Bool
 hasPackage n = isJust . lookupPackage n
 
 removePackage :: PackageName -> Packages -> Packages
-removePackage s = filter ((/= s). _name)
+removePackage s = filter ((/= s). view name)
 
 removeAll :: [PackageName] -> Packages -> Packages
 removeAll = flip $ foldr removePackage
@@ -61,12 +56,15 @@ packages =
   do (_, hOut, _, _) <- runInteractiveCommand "find . -name *.cabal -type f"
      paths <- lines <$> hGetContents hOut
      forM paths $ \p ->
-        do pkg <- flattenPackageDescription `liftM` readPackageDescription normal p
+        do gpd <- readGenericPackageDescription normal p
+           let pkg = packageDescription gpd
            return $ Package
                       { _name = pkgName $ package pkg
                       , _path = p
                       , _version = pkgVersion $ package pkg
-                      , _dependencies = buildDepends pkg
+                      , _dependencies = targetBuildDepends $ (case allBuildInfo pkg of
+                                                                (bi:_) -> bi
+                                                                []     -> emptyBuildInfo)
                       }
 
 getBaseVersions :: String -> Packages -> IO Packages
@@ -74,10 +72,10 @@ getBaseVersions ind ps =
  do (_, hOut, _, _) <- runInteractiveCommand $ "tar -tf " ++ ind
     gps <- lines <$> hGetContents hOut
     let vs = catMaybes $ map (parseVer . splitOn "/") gps
-        parseVer (n:v:_) = fmap (PackageName n, ) $ simpleParse v
+        parseVer (n:v:_) = fmap (mkPackageName n, ) $ simpleParse v
         parseVer _       = Nothing
         globver = M.fromListWith (\a b -> if a > b then a else b) vs
-        updVer p = modify version (maybe id (\v -> if get version p < v then const v else id) $ M.lookup (_name p) globver) p
+        updVer p = over version (maybe id (\v -> if view version p < v then const v else id) $ M.lookup (view name p) globver) p
     return $ map updVer ps
 
 -- | Manipulating package contents
@@ -90,11 +88,11 @@ modifyVersion v s = subRegex (mkRegexWithOpts regex False False) s result
         result = "\\1 " ++ display v
 
 modifyDependency :: Dependency -> String -> String
-modifyDependency (Dependency nm range) s = subRegex (mkRegexWithOpts regex False False) s result
+modifyDependency (Dependency nm range _) s = subRegex (mkRegexWithOpts regex False False) s result
   where regex = "(build-depends" ++ whiteReg ++ ":" ++ "[^:]*"
               ++ "[ ,\n\t]" ++ display nm ++ whiteReg ++ ")([" ++ rangeChar ++ " \t\n]*[" ++ rangeChar ++ "])"
         rangeChar = "0-9.*&|()<>="
-        result = "\\1" ++ printRange range
+        result = "\\1" ++ display range
 
 -- | Data structure containing package modifications
 type PackageChanges = (Maybe Version, [Dependency])
@@ -105,4 +103,4 @@ modifyPackage (mv, deps) = flip (foldr modifyDependency) deps
                          . maybe id modifyVersion mv
 
 updatePackage :: Package -> PackageChanges -> IO ()
-updatePackage p ch = readFile (get path p) >>= writeFile (get path p) . modifyPackage ch
+updatePackage p ch = readFile (view path p) >>= writeFile (view path p) . modifyPackage ch

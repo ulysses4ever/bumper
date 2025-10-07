@@ -1,19 +1,15 @@
-{-# LANGUAGE
-    TypeOperators
-  , TemplateHaskell
-  #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Config where
 
+import Control.Lens
 import Control.Monad
-import Data.Label
 import Data.List.Split
-import Data.Version
+import Distribution.Types.Version (Version)
 import Distribution.Package
-import Distribution.Text
+import Distribution.Parsec
 import System.Console.GetOpt
 import System.Environment
 import qualified Data.Map as M
-
 data Action = Run
             | ShowDeps
             | ShowHelp
@@ -29,7 +25,7 @@ data Config = Config
   , _action     :: Action
   } deriving Show
 
-$(mkLabels [''Config])
+$(makeLenses ''Config)
 
 defaultConfig :: Config
 defaultConfig = Config
@@ -45,8 +41,8 @@ versionPar :: String -> [(PackageName, Version)]
 versionPar = foldr addVer [] . splitOn ","
   where addVer fld ac =
           case splitOn "@" fld of
-            [p,v] -> case simpleParse v of
-                        (Just ver) -> (PackageName p, ver) : ac
+            [p,v] -> case simpleParsec v of
+                        (Just ver) -> (mkPackageName p, ver) : ac
                         Nothing    -> ac
             _     -> ac
 
@@ -57,16 +53,16 @@ options = [ Option ['m'] ["major"]         (ReqArg (addBumps 1) "PACKAGE(,PACKAG
           , Option ['1'] ["bump-1"]        (ReqArg (addBumps 1) "PACKAGE(,PACKAGE)*") "Comma-separated list of packages which will get a bump at position 1."
           , Option ['2'] ["bump-2"]        (ReqArg (addBumps 2) "PACKAGE(,PACKAGE)*") "Comma-separated list of packages which will get a bump at position 2."
           , Option ['3'] ["bump-3"]        (ReqArg (addBumps 3) "PACKAGE(,PACKAGE)*") "Comma-separated list of packages which will get a bump at position 3."
-          , Option []    ["set-versions"]  (ReqArg (\v -> modify setVersion (++ versionPar v)) "PACKAGE@VERSION(,PACKAGE@VERSION)*") "Comma-separated list of packages and their versions."
+          , Option []    ["set-versions"]  (ReqArg (\v -> over setVersion (++ versionPar v)) "PACKAGE@VERSION(,PACKAGE@VERSION)*") "Comma-separated list of packages and their versions."
           , Option ['t'] ["no-transitive"] (NoArg  (set transitive False))   "Do not apply bumping transitively."
-          , Option ['i'] ["ignore"]        (ReqArg (\v -> modify ignore (++ map PackageName (splitOn "," v))) "PACKAGE(,PACKAGE)*") "Comma-separated list of packages which will be ignored when transitive bumping."
+          , Option ['i'] ["ignore"]        (ReqArg (\v -> over ignore (++ map mkPackageName (splitOn "," v))) "PACKAGE(,PACKAGE)*") "Comma-separated list of packages which will be ignored when transitive bumping."
           , Option ['g'] ["global"]        (ReqArg (\v -> set global (Just v)) "PATH")     "Bump according to latest version number in the given package database."
           , Option ['d'] ["dry-run"]       (NoArg  (set action ShowDeps))                  "Just output the dependencies that will be updated."
           , Option ['?'] ["help"]          (NoArg  (set action ShowHelp))                  "Show usage help and exit."
           , Option ['v'] ["version"]       (NoArg  (set action ShowVersion))               "Show version info and exit."
           ]
       where addBumps :: Int -> String -> Config -> Config
-            addBumps p pks = modify bump (M.insertWith (++) p (map PackageName $ splitOn "," pks))
+            addBumps p pks = over bump (M.insertWith (++) p (map mkPackageName $ splitOn "," pks))
 
 getConfig :: IO Config
 getConfig =

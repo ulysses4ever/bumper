@@ -1,6 +1,9 @@
 # Bumper
 
-[![Build Status](https://travis-ci.org/silkapp/bumper.svg?branch=master)](https://travis-ci.org/silkapp/bumper)
+[![Build Status](https://github.com/ulysses4ever/bumper/workflows/Haskell-CI/badge.svg)](https://github.com/ulysses4ever/bumper/actions?query=workflow%3Ahaskell-ci)
+[![Hackage](https://img.shields.io/hackage/v/bumper.svg?label=Hackage)](https://hackage.haskell.org/package/bumper)
+[![Stackage Nightly Version](https://www.stackage.org/package/bumper/badge/nightly?label=Stackage/Nightly)](https://www.stackage.org/package/bumper)
+[![Stackage LTS Version](https://www.stackage.org/package/bumper/badge/lts?label=Stackage/LTS)](https://www.stackage.org/package/bumper)
 
 Bumper is a tool for working with cabal packages. It lets you manage the version bounds of packages by transitively bumping packages (and their dependencies transitively), without you needing to edit the cabal files manually.
 

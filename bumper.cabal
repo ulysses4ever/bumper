@@ -1,10 +1,11 @@
 cabal-version:       3.4
 name:                bumper
-version:             0.6.0.3
+version:             0.7.0.0
+description:
+    Bumper is a tool for working with cabal packages.
+    It lets you manage the version bounds of packages by transitively bumping packages
+    (and their dependencies transitively), without you needing to edit the cabal files manually.
 synopsis:            Automatically bump package versions, also transitively.
-description:         Automatically bump package versions, also transitively.
-                     .
-                     Readme: <https://www.github.com/silkapp/bumper/blob/master/README.md>
 author:              Silk
 copyright:           (c) 2012, Silk
 maintainer:          Artem Pelenitsyn <a@pelenitsyn.top>

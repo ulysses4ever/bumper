@@ -1,3 +1,8 @@
+#### 0.7.0.0
+
+* Update dependencies for 2025
+* Migrate from `fclabels` to `lens`
+
 #### 0.6.0.3
 
 * Allow Cabal 1.22.*
